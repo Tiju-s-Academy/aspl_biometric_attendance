@@ -1,0 +1,45 @@
+<?xml version="1.0" ?>
+<odoo>
+    <data>
+        <record id="view_attendance_form" model="ir.ui.view">
+            <field name="name">hr.attendance.form</field>
+            <field name="model">hr.attendance</field>
+            <field name="inherit_id" ref="hr_attendance.hr_attendance_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='employee_id']" position="after">
+                    <field name="comment"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="inherit_attendance_record_view_tree" model="ir.ui.view">
+            <field name="name">Attendance Record Tree</field>
+            <field name="model">hr.attendance</field>
+            <field name="inherit_id" ref="hr_attendance.view_attendance_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='employee_id']" position="after">
+                    <field name="comment"/>
+                    <field name="has_error" invisible="1"/>
+                </xpath>
+                <tree position="attributes">
+                    <attribute name="decoration-danger">has_error</attribute>
+                </tree>
+            </field>
+        </record>
+
+        <!--Default Kiosk Mode Menu-->
+        <record id="hr_attendance.menu_hr_attendance_kiosk_no_user_mode" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+
+        <!--Default Report Menu-->
+        <record id="hr_attendance.menu_hr_attendance_reporting" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+
+        <!--Default Configuration Menu-->
+        <record id="hr_attendance.menu_hr_attendance_settings" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</odoo>

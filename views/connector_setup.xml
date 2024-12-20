@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <record id="sqls_connection_tree" model="ir.ui.view">
+            <field name="name">SQL Server Connection tree</field>
+            <field name="model">connector.sqlserver</field>
+            <field name="type">tree</field>
+            <field name="arch" type="xml">
+                <tree string="SQL Server Connection">
+                    <field name="name"/>
+                    <field name="db_ip"/>
+                    <field name="db_user"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="sqls_connection_form" model="ir.ui.view">
+            <field name="name">SQL Server Connection form</field>
+            <field name="model">connector.sqlserver</field>
+            <field name="type">form</field>
+            <field name="arch" type="xml">
+                <form string="SQL Server Connection">
+                    <header>
+                        <button name="connect" string="Test Connection" type="object" class="oe_highlight"
+                                invisible="state not in ['new']"/>
+                        <button name="active" string="Active" type="object" class="oe_highlight"
+                                invisible="state in ['active','new']"/>
+                        <button name="deactive" string="Deactive" type="object" class="oe_highlight"
+                                invisible="state in ['new','deactive']"/>
+                        <field name="state" widget="statusbar"/>
+                    </header>
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="name"/>
+                                <field name="db_ip"/>
+                                <field name="auto_gen_attendance"/>
+                            </group>
+                            <group>
+                                <field name="db_name"/>
+                                <field name="db_user"/>
+                                <field name="password"/>
+                                <field name="db_port"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <menuitem name="Sql Server Connections"
+                  id="menu_sqls_connection"
+                  parent="base.menu_administration"
+                  sequence="30"/>
+
+        <record id="sqls_connection_view" model="ir.actions.act_window">
+            <field name="name">SQL Server Connection</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">connector.sqlserver</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_id" ref="sqls_connection_tree"/>
+        </record>
+
+        <menuitem action="sqls_connection_view"
+                  id="menu_sqls_connection_settings"
+                  name="SQL Server Connections"
+                  parent="hr_attendance.menu_hr_attendance_root"
+                  groups="hr_attendance.group_hr_attendance_manager"
+                  sequence="100"
+        />
+    </data>
+</odoo>
