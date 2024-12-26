@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import pymssql
+from pymssql import OperationalError
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 
@@ -30,8 +31,10 @@ class Connector(models.Model):
                 conn = pymssql.connect(
                     host=server, user=rec.db_user, password=rec.password, database=rec.db_name, port=rec.db_port)
                 rec.write({'state': 'active'})
+            except OperationalError as e:
+                raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again.'))
             except ValueError as e:
-                raise ValidationError(_('Connection error: ' + e))
+                raise ValidationError(_('Connection error: ' + str(e)))
             conn.close()
 
     def active(self):
