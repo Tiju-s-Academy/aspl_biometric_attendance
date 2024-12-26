@@ -4,7 +4,9 @@ import pymssql
 from pymssql import OperationalError
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class Connector(models.Model):
     _name = 'connector.sqlserver'
@@ -27,15 +29,22 @@ class Connector(models.Model):
     def connect(self):
         for rec in self:
             server = rec.db_ip
+            _logger.info('Attempting to connect to the database at %s', server)
             try:
                 conn = pymssql.connect(
                     host=server, user=rec.db_user, password=rec.password, database=rec.db_name, port=rec.db_port)
                 rec.write({'state': 'active'})
+                _logger.info('Successfully connected to the database at %s', server)
             except OperationalError as e:
+                _logger.error('OperationalError: %s', e)
                 raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again.'))
             except ValueError as e:
+                _logger.error('ValueError: %s', e)
                 raise ValidationError(_('Connection error: ' + str(e)))
-            conn.close()
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+                    _logger.info('Database connection closed.')
 
     def active(self):
         self.write({'state': 'active'})
