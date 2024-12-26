@@ -29,7 +29,7 @@ class Connector(models.Model):
     def connect(self):
         for rec in self:
             server = rec.db_ip
-            _logger.info('Attempting to connect to the database at %s', server)
+            _logger.info('Attempting to connect to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
             try:
                 conn = pymssql.connect(
                     host=server, user=rec.db_user, password=rec.password, database=rec.db_name, port=rec.db_port)
@@ -37,7 +37,7 @@ class Connector(models.Model):
                 _logger.info('Successfully connected to the database at %s', server)
             except OperationalError as e:
                 _logger.error('OperationalError: %s', e)
-                raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again.'))
+                raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again. Error: %s') % e)
             except ValueError as e:
                 _logger.error('ValueError: %s', e)
                 raise ValidationError(_('Connection error: ' + str(e)))
