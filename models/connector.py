@@ -26,10 +26,10 @@ class Connector(models.Model):
     state = fields.Selection([('new', 'New'), ('active', 'Active'), ('deactive', 'De Active')], default='new')
     auto_gen_attendance = fields.Boolean("Automatic Attendance Generation")
 
-    def connect(self):
+    def test_connection(self):
         for rec in self:
             server = rec.db_ip
-            _logger.info('Attempting to connect to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
+            _logger.info('Testing connection to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
             try:
                 conn_str = (
                     f'DRIVER={{ODBC Driver 17 for SQL Server}};'
@@ -39,18 +39,23 @@ class Connector(models.Model):
                     f'PWD={rec.password}'
                 )
                 conn = pyodbc.connect(conn_str)
-                rec.write({'state': 'active'})
-                _logger.info('Successfully connected to the database at %s', server)
+                conn.close()
+                _logger.info('Successfully tested connection to the database at %s', server)
+                return True
             except OperationalError as e:
                 _logger.error('OperationalError: %s', e)
-                raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again. Error: %s') % e)
+                return False
             except ValueError as e:
                 _logger.error('ValueError: %s', e)
-                raise ValidationError(_('Connection error: ' + str(e)))
-            finally:
-                if 'conn' in locals():
-                    conn.close()
-                    _logger.info('Database connection closed.')
+                return False
+
+    def connect(self):
+        for rec in self:
+            if rec.test_connection():
+                rec.write({'state': 'active'})
+                _logger.info('Successfully connected to the database at %s', rec.db_ip)
+            else:
+                raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again.'))
 
     def active(self):
         self.write({'state': 'active'})
