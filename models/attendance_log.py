@@ -2,7 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import datetime
 
-import pymssql
+import pyodbc
 import pytz
 from dateutil.relativedelta import relativedelta
 from odoo import fields, models, _
@@ -24,9 +24,15 @@ class AttendanceLog(models.Model):
         connector_ids = self.env['connector.sqlserver'].search([('auto_gen_attendance', '=', True)])
         for connector in connector_ids:
             try:
-                conn = pymssql.connect(server=connector.db_ip, user=connector.db_user,
-                                       password=connector.password, database=connector.db_name,
-                                       port=connector.db_port)
+                conn_str = (
+                    f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+                    f'SERVER={connector.db_ip},{connector.db_port};'
+                    f'DATABASE={connector.db_name};'
+                    f'UID={connector.db_user};'
+                    f'PWD={connector.password};'
+                    f'TrustServerCertificate=yes;'
+                )
+                conn = pyodbc.connect(conn_str)
 
                 start_date = (datetime.datetime.today() - relativedelta(months=1)).strftime("%Y-%m-%d")
                 end_date = datetime.datetime.today().strftime("%Y-%m-%d")
