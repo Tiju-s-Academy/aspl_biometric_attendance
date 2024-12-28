@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
-import pymssql
-from pymssql import OperationalError
+import pyodbc
+from pyodbc import OperationalError
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 import logging
@@ -31,8 +31,14 @@ class Connector(models.Model):
             server = rec.db_ip
             _logger.info('Attempting to connect to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
             try:
-                conn = pymssql.connect(
-                    host=server, user=rec.db_user, password=rec.password, database=rec.db_name, port=rec.db_port)
+                conn_str = (
+                    f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+                    f'SERVER={server},{rec.db_port};'
+                    f'DATABASE={rec.db_name};'
+                    f'UID={rec.db_user};'
+                    f'PWD={rec.password}'
+                )
+                conn = pyodbc.connect(conn_str)
                 rec.write({'state': 'active'})
                 _logger.info('Successfully connected to the database at %s', server)
             except OperationalError as e:
