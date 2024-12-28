@@ -29,15 +29,17 @@ class Connector(models.Model):
     def test_connection(self):
         for rec in self:
             server = rec.db_ip
-            _logger.info('Testing connection to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
+            _logger.debug('Testing connection to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
             try:
                 conn_str = (
                     f'DRIVER={{ODBC Driver 17 for SQL Server}};'
                     f'SERVER={server},{rec.db_port};'
                     f'DATABASE={rec.db_name};'
                     f'UID={rec.db_user};'
-                    f'PWD={rec.password}'
+                    f'PWD={rec.password};'
+                    f'TrustServerCertificate=yes;'
                 )
+                _logger.debug('Connection string: %s', conn_str)
                 conn = pyodbc.connect(conn_str)
                 conn.close()
                 _logger.info('Successfully tested connection to the database at %s', server)
@@ -51,10 +53,12 @@ class Connector(models.Model):
 
     def connect(self):
         for rec in self:
+            _logger.debug('Attempting to connect with the following details: IP=%s, User=%s, Port=%s, Database=%s', rec.db_ip, rec.db_user, rec.db_port, rec.db_name)
             if rec.test_connection():
                 rec.write({'state': 'active'})
                 _logger.info('Successfully connected to the database at %s', rec.db_ip)
             else:
+                _logger.debug('Failed to connect to the database with the provided details.')
                 raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again.'))
 
     def active(self):
