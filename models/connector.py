@@ -5,6 +5,8 @@ from pyodbc import OperationalError
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 import logging
+from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 
 _logger = logging.getLogger(__name__)
 
@@ -31,18 +33,10 @@ class Connector(models.Model):
             server = rec.db_ip
             _logger.debug('Testing connection to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
             try:
-                conn_str = (
-                    f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-                    f'SERVER={server};'
-                    f'PORT={rec.db_port};'
-                    f'DATABASE={rec.db_name};'
-                    f'UID={rec.db_user};'
-                    f'PWD={rec.password};'
-                    f'TrustServerCertificate=yes;'
-                )
-                _logger.debug('Connection string: %s', conn_str)
-                conn = pyodbc.connect(conn_str, timeout=10)
-                conn.close()
+                conn_str = f'mssql+pymssql://{rec.db_user}:{rec.password}@{server}:{rec.db_port}/{rec.db_name}'
+                engine = create_engine(conn_str)
+                connection = engine.connect()
+                connection.close()
                 _logger.info('Successfully tested connection to the database at %s', server)
                 return True
             except OperationalError as e:
