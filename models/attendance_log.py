@@ -26,13 +26,14 @@ class AttendanceLog(models.Model):
             try:
                 conn_str = (
                     f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-                    f'SERVER={connector.db_ip},{connector.db_port};'
+                    f'SERVER={connector.db_ip};'
+                    f'PORT={connector.db_port};'
                     f'DATABASE={connector.db_name};'
                     f'UID={connector.db_user};'
                     f'PWD={connector.password};'
                     f'TrustServerCertificate=yes;'
                 )
-                conn = pyodbc.connect(conn_str)
+                conn = pyodbc.connect(conn_str, timeout=10)
 
                 start_date = (datetime.datetime.today() - relativedelta(months=1)).strftime("%Y-%m-%d")
                 end_date = datetime.datetime.today().strftime("%Y-%m-%d")

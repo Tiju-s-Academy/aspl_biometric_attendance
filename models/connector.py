@@ -33,14 +33,15 @@ class Connector(models.Model):
             try:
                 conn_str = (
                     f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-                    f'SERVER={server},{rec.db_port};'
+                    f'SERVER={server};'
+                    f'PORT={rec.db_port};'
                     f'DATABASE={rec.db_name};'
                     f'UID={rec.db_user};'
                     f'PWD={rec.password};'
                     f'TrustServerCertificate=yes;'
                 )
                 _logger.debug('Connection string: %s', conn_str)
-                conn = pyodbc.connect(conn_str)
+                conn = pyodbc.connect(conn_str, timeout=10)
                 conn.close()
                 _logger.info('Successfully tested connection to the database at %s', server)
                 return True
