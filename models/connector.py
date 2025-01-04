@@ -50,36 +50,27 @@ class Connector(models.Model):
             
             # Try different connection configurations
             configs = [
-                # Basic configuration without SSL
+                # Basic configuration
                 {
                     'server': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
-                    'port': int(self.db_port),
-                    'tds_version': '7.4',
-                    'encrypt': False,
-                    'trust_server_certificate': False
+                    'port': int(self.db_port)
                 },
-                # Try with different server format
+                # Alternative server format
                 {
                     'server': f'{self.db_ip}:{self.db_port}',
                     'user': self.db_user,
                     'password': self.password,
-                    'database': self.db_name,
-                    'tds_version': '7.4',
-                    'encrypt': False,
-                    'trust_server_certificate': False
+                    'database': self.db_name
                 },
-                # Try with minimal config
+                # Minimal configuration
                 {
                     'host': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
-                    'database': self.db_name,
-                    'tds_version': '7.4',
-                    'encrypt': False,
-                    'trust_server_certificate': False
+                    'database': self.db_name
                 }
             ]
 
@@ -88,13 +79,7 @@ class Connector(models.Model):
                 try:
                     _logger.info('Attempt %d: Trying connection with config: %s', 
                         i, {k:v for k,v in config.items() if k != 'password'})
-
-                    # Test network connectivity first
-                    if not self._test_network(self.db_ip, self.db_port):
-                        _logger.warning('Network connectivity test failed')
-                        continue
-
-                    # Test connection and version
+                    
                     conn = pymssql.connect(**config)
                     cursor = conn.cursor()
                     cursor.execute('SELECT @@VERSION')
@@ -105,11 +90,6 @@ class Connector(models.Model):
                 except Exception as e:
                     last_error = e
                     _logger.warning('Connection attempt %d failed: %s', i, str(e))
-                    if 'conn' in locals():
-                        try:
-                            conn.close()
-                        except:
-                            pass
                     continue
 
             if last_error:
