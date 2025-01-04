@@ -60,8 +60,7 @@ class Connector(models.Model):
                 'timeout': 10,
                 'login_timeout': 10,
                 'autocommit': True,
-                'appname': 'Odoo',
-                'blocksize': 4096      # Match working server's block size
+                'appname': 'Odoo'
             }
 
             _logger.info('Attempting connection with config: %s', 
