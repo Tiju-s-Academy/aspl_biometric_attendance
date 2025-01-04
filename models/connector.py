@@ -50,62 +50,66 @@ class Connector(models.Model):
             
             # Try different connection configurations
             configs = [
+                # Try FreeTDS DSN first
+                {
+                    'dsn': 'sqlserver',
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                    'as_dict': True
+                },
+                # Direct connection as fallback
                 {
                     'server': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
                     'port': int(self.db_port),
-                    'as_dict': True,
-                    'tds_version': '7.2',
+                    'tds_version': '7.1',
                     'charset': 'UTF-8',
+                    'timeout': 60,
                     'appname': 'Odoo'
-                },
-                {
-                    'dsn': 'sqlserver',  # Uses FreeTDS config
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name,
-                    'as_dict': True
-                },
-                {
-                    'host': self.db_ip,
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name,
-                    'port': int(self.db_port)
                 }
             ]
 
             last_error = None
-            for config in configs:
+            for i, config in enumerate(configs, 1):
                 try:
-                    _logger.debug('Trying connection with config: %s', {
-                        k: v for k, v in config.items() if k != 'password'
-                    })
+                    _logger.info('Attempt %d: Trying connection with config: %s', 
+                        i, {k:v for k,v in config.items() if k != 'password'})
                     
-                    # Try to establish connection
+                    # Import subprocess for testing
+                    import subprocess
+                    try:
+                        # Test connection using tsql before attempting pymssql
+                        if 'dsn' in config:
+                            subprocess.run([
+                                'tsql', 
+                                '-S', 'sqlserver',
+                                '-U', self.db_user,
+                                '-P', self.password
+                            ], capture_output=True, check=True, timeout=5)
+                            _logger.info('TSQL test successful')
+                    except subprocess.CalledProcessError as e:
+                        _logger.warning('TSQL test failed: %s', e.stderr)
+                    
                     conn = pymssql.connect(**config)
-                    
-                    # Test the connection with a simple query
                     cursor = conn.cursor()
                     cursor.execute('SELECT @@VERSION')
                     version = cursor.fetchone()
-                    _logger.info('Connected to SQL Server version: %s', version)
+                    _logger.info('Successfully connected. SQL Server version: %s', version)
                     
                     return conn
                 except Exception as e:
                     last_error = e
-                    _logger.warning('Connection attempt failed: %s', str(e))
+                    _logger.warning('Connection attempt %d failed: %s', i, str(e))
                     continue
 
             if last_error:
-                _logger.error('All connection attempts failed with configs: %s', 
-                    [{k: v for k, v in c.items() if k != 'password'} for c in configs])
                 raise last_error
             
         except Exception as e:
-            _logger.error(f'Connection failed: {str(e)}', exc_info=True)
+            _logger.error('Connection failed: %s', str(e), exc_info=True)
             raise ValidationError(_(f'Connection error: {str(e)}'))
 
     def test_connection(self):
