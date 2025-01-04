@@ -2,11 +2,12 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import pyodbc
 from pyodbc import OperationalError
+import pymssql
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 import logging
-from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
+import socket
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -28,33 +29,112 @@ class Connector(models.Model):
     state = fields.Selection([('new', 'New'), ('active', 'Active'), ('deactive', 'De Active')], default='new')
     auto_gen_attendance = fields.Boolean("Automatic Attendance Generation")
 
+    def _test_network(self, host, port):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, int(port)))
+            sock.close()
+            if result == 0:
+                _logger.info(f"Port {port} is open on host {host}")
+                return True
+            _logger.error(f"Port {port} is closed on host {host}")
+            return False
+        except Exception as e:
+            _logger.error(f"Network test failed: {str(e)}")
+            return False
+
     def test_connection(self):
         for rec in self:
             server = rec.db_ip
-            _logger.debug('Testing connection to the database at %s with user %s on port %s', server, rec.db_user, rec.db_port)
-            try:
-                conn_str = f'mssql+pymssql://{rec.db_user}:{rec.password}@{server}:{rec.db_port}/{rec.db_name}'
-                engine = create_engine(conn_str)
-                connection = engine.connect()
-                connection.close()
-                _logger.info('Successfully tested connection to the database at %s', server)
-                return True
-            except OperationalError as e:
-                _logger.error('OperationalError: %s', e)
+            _logger.info('Starting connection test sequence...')
+            
+            # Test network connectivity first
+            if not self._test_network(server, rec.db_port):
+                _logger.error('Network connectivity test failed')
                 return False
-            except ValueError as e:
-                _logger.error('ValueError: %s', e)
-                return False
+
+            # Try different connection methods
+            methods = [
+                self._try_pymssql_connection,
+                self._try_pyodbc_connection,
+                self._try_direct_connection
+            ]
+
+            for method in methods:
+                try:
+                    if method(rec):
+                        return True
+                except Exception as e:
+                    _logger.error(f'Connection method {method.__name__} failed: {str(e)}')
+                    continue
+            
+            return False
+
+    def _try_pymssql_connection(self, rec):
+        _logger.info('Attempting PyMSSQL connection...')
+        try:
+            conn = pymssql.connect(
+                server=rec.db_ip,
+                user=rec.db_user,
+                password=rec.password,
+                database=rec.db_name,
+                port=int(rec.db_port),
+                timeout=10
+            )
+            _logger.info('PyMSSQL connection successful')
+            conn.close()
+            return True
+        except Exception as e:
+            _logger.error(f'PyMSSQL connection failed: {str(e)}')
+            raise
+
+    def _try_pyodbc_connection(self, rec):
+        _logger.info('Attempting PyODBC connection...')
+        try:
+            conn_str = (
+                f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+                f'SERVER={rec.db_ip};'
+                f'PORT={rec.db_port};'
+                f'DATABASE={rec.db_name};'
+                f'UID={rec.db_user};'
+                f'PWD={rec.password};'
+                f'TrustServerCertificate=yes;'
+                f'Timeout=10;'
+            )
+            _logger.debug(f'Connection string: {conn_str}')
+            conn = pyodbc.connect(conn_str)
+            _logger.info('PyODBC connection successful')
+            conn.close()
+            return True
+        except Exception as e:
+            _logger.error(f'PyODBC connection failed: {str(e)}')
+            raise
+
+    def _try_direct_connection(self, rec):
+        _logger.info('Attempting direct TCP connection...')
+        try:
+            conn_str = f"tcp:host={rec.db_ip},port={rec.db_port};uid={rec.db_user};pwd={rec.password}"
+            sock = socket.create_connection((rec.db_ip, int(rec.db_port)), timeout=10)
+            _logger.info('TCP connection successful')
+            sock.close()
+            return True
+        except Exception as e:
+            _logger.error(f'Direct TCP connection failed: {str(e)}')
+            raise
 
     def connect(self):
         for rec in self:
-            _logger.debug('Attempting to connect with the following details: IP=%s, User=%s, Port=%s, Database=%s', rec.db_ip, rec.db_user, rec.db_port, rec.db_name)
+            _logger.info(f'Attempting to connect to {rec.db_ip}:{rec.db_port}')
+            start_time = time.time()
+            
             if rec.test_connection():
+                elapsed_time = time.time() - start_time
+                _logger.info(f'Connection successful after {elapsed_time:.2f} seconds')
                 rec.write({'state': 'active'})
-                _logger.info('Successfully connected to the database at %s', rec.db_ip)
             else:
-                _logger.debug('Failed to connect to the database with the provided details.')
-                raise ValidationError(_('Connection error: Unable to connect to the database. Please check your connection details and try again.'))
+                _logger.error('All connection attempts failed')
+                raise ValidationError(_('Connection error: Unable to connect to the database. Please check the logs for detailed error information.'))
 
     def active(self):
         self.write({'state': 'active'})
