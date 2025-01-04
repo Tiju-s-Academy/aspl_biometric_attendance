@@ -50,25 +50,38 @@ class Connector(models.Model):
             
             # Try different connection configurations
             configs = [
-                # Try FreeTDS DSN first
-                {
-                    'dsn': 'sqlserver',
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name,
-                    'as_dict': True
-                },
-                # Direct connection as fallback
+                # Try with encryption disabled
                 {
                     'server': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
                     'port': int(self.db_port),
-                    'tds_version': '7.1',
+                    'tds_version': '7.4',
                     'charset': 'UTF-8',
-                    'timeout': 60,
-                    'appname': 'Odoo'
+                    'timeout': 30,
+                    'encrypt': False,
+                    'trust_server_certificate': True
+                },
+                # Try with older TDS version
+                {
+                    'server': self.db_ip,
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                    'port': int(self.db_port),
+                    'tds_version': '7.2',
+                    'charset': 'UTF-8',
+                    'encrypt': False
+                },
+                # Try basic connection
+                {
+                    'host': self.db_ip,
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                    'port': int(self.db_port),
+                    'as_dict': False
                 }
             ]
 
@@ -77,32 +90,28 @@ class Connector(models.Model):
                 try:
                     _logger.info('Attempt %d: Trying connection with config: %s', 
                         i, {k:v for k,v in config.items() if k != 'password'})
-                    
-                    # Import subprocess for testing
-                    import subprocess
-                    try:
-                        # Test connection using tsql before attempting pymssql
-                        if 'dsn' in config:
-                            subprocess.run([
-                                'tsql', 
-                                '-S', 'sqlserver',
-                                '-U', self.db_user,
-                                '-P', self.password
-                            ], capture_output=True, check=True, timeout=5)
-                            _logger.info('TSQL test successful')
-                    except subprocess.CalledProcessError as e:
-                        _logger.warning('TSQL test failed: %s', e.stderr)
-                    
+
+                    # Test network connectivity first
+                    if not self._test_network(self.db_ip, self.db_port):
+                        _logger.warning('Network connectivity test failed')
+                        continue
+
+                    # Test connection and version
                     conn = pymssql.connect(**config)
                     cursor = conn.cursor()
                     cursor.execute('SELECT @@VERSION')
                     version = cursor.fetchone()
-                    _logger.info('Successfully connected. SQL Server version: %s', version)
+                    _logger.info('Successfully connected with config %d. SQL Server version: %s', i, version)
                     
                     return conn
                 except Exception as e:
                     last_error = e
                     _logger.warning('Connection attempt %d failed: %s', i, str(e))
+                    if 'conn' in locals():
+                        try:
+                            conn.close()
+                        except:
+                            pass
                     continue
 
             if last_error:

@@ -19,8 +19,8 @@
     "website": "https://aspiresoftserv.com",
     "depends": ['base', 'hr', 'hr_attendance'],
     "external_dependencies": {
-        'python': ['pymssql', 'pytz'],
-        'bin': ['tsql', 'freetds-bin']
+        'python': ['pymssql'],
+        'bin': ['odbcinst']
     },
     "data": [
         'security/user_group.xml',
