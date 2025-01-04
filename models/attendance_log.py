@@ -29,35 +29,52 @@ class AttendanceLog(models.Model):
         
         while retry_count < max_retries:
             try:
-                _logger.info(f'Attempt {retry_count + 1} of {max_retries}')
-                # Use the shared connection method from connector
-                conn = connector.get_connection()
+                _logger.info(f'Attempt {retry_count + 1} of {max_retries} to connect to {connector.db_ip}')
+                # Test if the connector is properly configured
+                if not connector.db_ip or not connector.db_port or not connector.db_name:
+                    raise ValidationError(_('Missing connection details in connector configuration'))
+
+                # Try to get a connection using the connector's method
+                conn = connector.with_context(scheduled_action=True).get_connection()
                 if conn:
+                    _logger.info(f'Successfully connected to {connector.db_ip} on attempt {retry_count + 1}')
+                    cursor = conn.cursor()
+                    # Test the connection with a simple query
+                    cursor.execute('SELECT 1')
+                    cursor.fetchone()
                     return conn
             except Exception as e:
                 last_error = e
                 retry_count += 1
-                _logger.warning(f'Connection attempt {retry_count} failed: {str(e)}')
-                time.sleep(2)
+                _logger.warning(
+                    f'Connection attempt {retry_count} failed for {connector.name}({connector.db_ip}): {str(e)}', 
+                    exc_info=True
+                )
+                time.sleep(2)  # Wait before retrying
         
-        raise ValidationError(_(f'Failed to connect after {max_retries} attempts. Last error: {str(last_error)}'))
+        _logger.error(
+            f'All connection attempts failed for {connector.name}({connector.db_ip}). Last error: {str(last_error)}',
+            exc_info=True
+        )
+        raise ValidationError(_(
+            f'Failed to connect to {connector.name} ({connector.db_ip}) after {max_retries} attempts. '
+            f'Last error: {str(last_error)}'
+        ))
 
     def generate_attendance(self):
-        connector_ids = self.env['connector.sqlserver'].search([('auto_gen_attendance', '=', True)])
+        connector_ids = self.env['connector.sqlserver'].search(
+            [('auto_gen_attendance', '=', True), ('state', '=', 'active')]
+        )
         _logger.info(f'Found {len(connector_ids)} active connectors')
         
         for connector in connector_ids:
             conn = None
             try:
-                if connector.state != 'active':
-                    _logger.warning(f'Skipping inactive connector: {connector.name}')
-                    continue
-
                 _logger.info(f'Processing connector: {connector.name} ({connector.db_ip}:{connector.db_port})')
-                conn = self._get_connection(connector)
                 
+                # Get connection with retry logic
+                conn = self._get_connection(connector)
                 if not conn:
-                    _logger.error(f'Could not establish connection for {connector.name}')
                     continue
 
                 start_date = (datetime.datetime.today() - relativedelta(months=1)).strftime("%Y-%m-%d")
