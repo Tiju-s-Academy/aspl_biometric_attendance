@@ -50,27 +50,36 @@ class Connector(models.Model):
             
             # Try different connection configurations
             configs = [
-                # Basic configuration
+                # Basic configuration without SSL
                 {
                     'server': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
-                    'port': int(self.db_port)
+                    'port': int(self.db_port),
+                    'tds_version': '7.4',
+                    'encrypt': False,
+                    'trust_server_certificate': False
                 },
                 # Try with different server format
                 {
                     'server': f'{self.db_ip}:{self.db_port}',
                     'user': self.db_user,
                     'password': self.password,
-                    'database': self.db_name
+                    'database': self.db_name,
+                    'tds_version': '7.4',
+                    'encrypt': False,
+                    'trust_server_certificate': False
                 },
                 # Try with minimal config
                 {
                     'host': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
-                    'database': self.db_name
+                    'database': self.db_name,
+                    'tds_version': '7.4',
+                    'encrypt': False,
+                    'trust_server_certificate': False
                 }
             ]
 
