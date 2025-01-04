@@ -29,39 +29,35 @@ class AttendanceLog(models.Model):
         
         while retry_count < max_retries:
             try:
-                _logger.info(f'Attempting connection to {connector.db_ip}:{connector.db_port} (attempt {retry_count + 1}/{max_retries})')
-                conn = pymssql.connect(
-                    server=connector.db_ip,
-                    user=connector.db_user,
-                    password=connector.password,
-                    database=connector.db_name,
-                    port=int(connector.db_port),
-                    timeout=30,  # Increased timeout
-                    login_timeout=20,  # Added login timeout
-                    appname='Odoo Attendance',  # Added application name
-                )
-                return conn
+                _logger.info(f'Attempt {retry_count + 1} of {max_retries}')
+                # Use the shared connection method from connector
+                conn = connector.get_connection()
+                if conn:
+                    return conn
             except Exception as e:
                 last_error = e
                 retry_count += 1
                 _logger.warning(f'Connection attempt {retry_count} failed: {str(e)}')
-                time.sleep(2)  # Wait before retrying
+                time.sleep(2)
         
         raise ValidationError(_(f'Failed to connect after {max_retries} attempts. Last error: {str(last_error)}'))
 
     def generate_attendance(self):
         connector_ids = self.env['connector.sqlserver'].search([('auto_gen_attendance', '=', True)])
+        _logger.info(f'Found {len(connector_ids)} active connectors')
+        
         for connector in connector_ids:
             conn = None
             try:
-                # Test if the connector is active
                 if connector.state != 'active':
                     _logger.warning(f'Skipping inactive connector: {connector.name}')
                     continue
 
-                # Get connection with retry logic
+                _logger.info(f'Processing connector: {connector.name} ({connector.db_ip}:{connector.db_port})')
                 conn = self._get_connection(connector)
+                
                 if not conn:
+                    _logger.error(f'Could not establish connection for {connector.name}')
                     continue
 
                 start_date = (datetime.datetime.today() - relativedelta(months=1)).strftime("%Y-%m-%d")
@@ -221,5 +217,6 @@ class AttendanceLog(models.Model):
                 if conn:
                     try:
                         conn.close()
+                        _logger.info('Connection closed successfully')
                     except Exception as e:
                         _logger.warning(f'Error closing connection: {str(e)}')

@@ -42,6 +42,28 @@ class Connector(models.Model):
             _logger.error(f"Network test failed: {str(e)}")
             return False
 
+    def get_connection(self):
+        """Shared connection method that can be used across the module"""
+        self.ensure_one()
+        try:
+            _logger.info(f'Creating connection to {self.db_ip}:{self.db_port}')
+            conn = pymssql.connect(
+                server=self.db_ip,
+                user=self.db_user,
+                password=self.password,
+                database=self.db_name,
+                port=int(self.db_port),
+                timeout=30,
+                login_timeout=20,
+                as_dict=True,
+                tds_version='7.3',  # Add specific TDS version
+                appname='Odoo Attendance'
+            )
+            return conn
+        except Exception as e:
+            _logger.error(f'Connection failed: {str(e)}')
+            raise ValidationError(_(f'Connection error: {str(e)}'))
+
     def test_connection(self):
         for rec in self:
             server = rec.db_ip
@@ -53,16 +75,7 @@ class Connector(models.Model):
                 return False
 
             try:
-                _logger.info('Attempting PyMSSQL connection...')
-                conn = pymssql.connect(
-                    server=rec.db_ip,
-                    user=rec.db_user,
-                    password=rec.password,
-                    database=rec.db_name,
-                    port=int(rec.db_port),
-                    timeout=10
-                )
-                _logger.info('PyMSSQL connection successful')
+                conn = self.get_connection()
                 conn.close()
                 return True
             except Exception as e:
