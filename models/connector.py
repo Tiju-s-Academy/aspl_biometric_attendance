@@ -56,7 +56,7 @@ class Connector(models.Model):
                 'database': self.db_name,
                 'port': int(self.db_port),
                 'tds_version': '7.3',  # Match working server's TDS version (73.b.0.3)
-                'charset': 'CP1252',   # Match working server's charset
+                'charset': 'UTF-8',    # Use UTF-8 charset
                 'timeout': 10,
                 'login_timeout': 10,
                 'autocommit': True,
