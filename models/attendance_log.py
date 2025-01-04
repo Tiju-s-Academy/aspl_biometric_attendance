@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 from odoo import fields, models, _
 from odoo.exceptions import ValidationError
 import logging
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -21,19 +22,47 @@ class AttendanceLog(models.Model):
     log_date = fields.Datetime(string="LogDate")
     direction = fields.Char(string="Direction")
 
-    def generate_attendance(self):
-        connector_ids = self.env['connector.sqlserver'].search([('auto_gen_attendance', '=', True)])
-        for connector in connector_ids:
+    def _get_connection(self, connector, max_retries=3):
+        """Helper method to establish connection with retry logic"""
+        retry_count = 0
+        last_error = None
+        
+        while retry_count < max_retries:
             try:
-                _logger.info(f'Attempting to connect to {connector.db_ip}:{connector.db_port}')
+                _logger.info(f'Attempting connection to {connector.db_ip}:{connector.db_port} (attempt {retry_count + 1}/{max_retries})')
                 conn = pymssql.connect(
                     server=connector.db_ip,
                     user=connector.db_user,
                     password=connector.password,
                     database=connector.db_name,
                     port=int(connector.db_port),
-                    timeout=10
+                    timeout=30,  # Increased timeout
+                    login_timeout=20,  # Added login timeout
+                    appname='Odoo Attendance',  # Added application name
                 )
+                return conn
+            except Exception as e:
+                last_error = e
+                retry_count += 1
+                _logger.warning(f'Connection attempt {retry_count} failed: {str(e)}')
+                time.sleep(2)  # Wait before retrying
+        
+        raise ValidationError(_(f'Failed to connect after {max_retries} attempts. Last error: {str(last_error)}'))
+
+    def generate_attendance(self):
+        connector_ids = self.env['connector.sqlserver'].search([('auto_gen_attendance', '=', True)])
+        for connector in connector_ids:
+            conn = None
+            try:
+                # Test if the connector is active
+                if connector.state != 'active':
+                    _logger.warning(f'Skipping inactive connector: {connector.name}')
+                    continue
+
+                # Get connection with retry logic
+                conn = self._get_connection(connector)
+                if not conn:
+                    continue
 
                 start_date = (datetime.datetime.today() - relativedelta(months=1)).strftime("%Y-%m-%d")
                 end_date = datetime.datetime.today().strftime("%Y-%m-%d")
@@ -183,9 +212,14 @@ class AttendanceLog(models.Model):
                                                                    'comment': last_attendance.comment + ', ' + user_date + '(O)'})
                                         prev_bio_data = bio_data
 
-                conn.close()
                 _logger.info('Successfully processed attendance data')
 
             except Exception as e:
-                _logger.error(f'Error generating attendance: {str(e)}')
-                raise ValidationError(_(f'Connection error: {str(e)}'))
+                _logger.error(f'Error in generate_attendance: {str(e)}', exc_info=True)
+                raise ValidationError(_(f'Attendance generation error: {str(e)}'))
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except Exception as e:
+                        _logger.warning(f'Error closing connection: {str(e)}')
