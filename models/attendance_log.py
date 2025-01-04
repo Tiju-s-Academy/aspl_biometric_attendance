@@ -30,25 +30,21 @@ class AttendanceLog(models.Model):
         while retry_count < max_retries:
             try:
                 _logger.info(f'Attempt {retry_count + 1} of {max_retries} to connect to {connector.db_ip}')
-                if not connector.db_ip or not connector.db_port or not connector.db_name:
-                    raise ValidationError(_('Missing connection details in connector configuration'))
+                
+                # Use subprocess to test connectivity first
+                import subprocess
+                try:
+                    subprocess.run(['tsql', '-S', connector.db_ip, '-p', str(connector.db_port), '-U', connector.db_user, '-P', connector.password], 
+                                 capture_output=True, check=True, timeout=5)
+                    _logger.info('TSQL connectivity test successful')
+                except subprocess.CalledProcessError as e:
+                    _logger.warning('TSQL connectivity test failed: %s', e.stderr)
 
-                # Increase wait time between retries
-                if retry_count > 0:
-                    time.sleep(retry_count * 3)  # Progressive delay
-
+                # Try connection
                 conn = connector.with_context(scheduled_action=True).get_connection()
                 if conn:
-                    try:
-                        cursor = conn.cursor()
-                        cursor.execute('SELECT @@VERSION')  # Test query
-                        version = cursor.fetchone()
-                        _logger.info(f'Connected to SQL Server version: {version}')
-                        return conn
-                    except Exception as e:
-                        _logger.error(f'Test query failed: {str(e)}')
-                        conn.close()
-                        raise
+                    return conn
+
             except Exception as e:
                 last_error = e
                 retry_count += 1
@@ -56,10 +52,11 @@ class AttendanceLog(models.Model):
                     f'Connection attempt {retry_count} failed for {connector.name}({connector.db_ip}): {str(e)}', 
                     exc_info=True
                 )
+                time.sleep(retry_count * 3)
         
-        _logger.error(f'All connection attempts failed. Last error: {str(last_error)}')
+        _logger.error('All connection attempts failed. Last error: %s', str(last_error))
         raise ValidationError(_(
-            f'Failed to connect after {max_retries} attempts. Error: {str(last_error)}'
+            f'Failed to connect to {connector.name} ({connector.db_ip}). Error: {str(last_error)}'
         ))
 
     def generate_attendance(self):

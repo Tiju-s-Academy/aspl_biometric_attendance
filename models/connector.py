@@ -48,38 +48,32 @@ class Connector(models.Model):
         try:
             _logger.info(f'Creating connection to {self.db_ip}:{self.db_port} with database {self.db_name}')
             
-            # Build server string with instance name if needed
-            server = f'{self.db_ip},{self.db_port}'
-            
             # Try different connection configurations
             configs = [
                 {
-                    'server': server,
+                    'server': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
+                    'port': int(self.db_port),
+                    'as_dict': True,
                     'tds_version': '7.2',
                     'charset': 'UTF-8',
-                    'timeout': 30,
-                    'login_timeout': 60,
-                    'appname': 'Odoo Attendance',
+                    'appname': 'Odoo'
+                },
+                {
+                    'dsn': 'sqlserver',  # Uses FreeTDS config
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                    'as_dict': True
                 },
                 {
                     'host': self.db_ip,
-                    'port': int(self.db_port),
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
-                    'tds_version': '7.3',
-                    'charset': 'UTF-8',
-                    'timeout': 30,
-                },
-                {
-                    'server': self.db_ip,
-                    'port': int(self.db_port),
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name,
+                    'port': int(self.db_port)
                 }
             ]
 
@@ -89,9 +83,16 @@ class Connector(models.Model):
                     _logger.debug('Trying connection with config: %s', {
                         k: v for k, v in config.items() if k != 'password'
                     })
+                    
+                    # Try to establish connection
                     conn = pymssql.connect(**config)
-                    _logger.info('Successfully connected with config: %s', 
-                        {k: v for k, v in config.items() if k != 'password'})
+                    
+                    # Test the connection with a simple query
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT @@VERSION')
+                    version = cursor.fetchone()
+                    _logger.info('Connected to SQL Server version: %s', version)
+                    
                     return conn
                 except Exception as e:
                     last_error = e
@@ -99,6 +100,8 @@ class Connector(models.Model):
                     continue
 
             if last_error:
+                _logger.error('All connection attempts failed with configs: %s', 
+                    [{k: v for k, v in c.items() if k != 'password'} for c in configs])
                 raise last_error
             
         except Exception as e:
