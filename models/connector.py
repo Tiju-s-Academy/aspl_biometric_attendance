@@ -50,38 +50,27 @@ class Connector(models.Model):
             
             # Try different connection configurations
             configs = [
-                # Try with encryption disabled
+                # Basic configuration
                 {
                     'server': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
                     'database': self.db_name,
-                    'port': int(self.db_port),
-                    'tds_version': '7.4',
-                    'charset': 'UTF-8',
-                    'timeout': 30,
-                    'encrypt': False,
-                    'trust_server_certificate': True
+                    'port': int(self.db_port)
                 },
-                # Try with older TDS version
+                # Try with different server format
                 {
-                    'server': self.db_ip,
+                    'server': f'{self.db_ip}:{self.db_port}',
                     'user': self.db_user,
                     'password': self.password,
-                    'database': self.db_name,
-                    'port': int(self.db_port),
-                    'tds_version': '7.2',
-                    'charset': 'UTF-8',
-                    'encrypt': False
+                    'database': self.db_name
                 },
-                # Try basic connection
+                # Try with minimal config
                 {
                     'host': self.db_ip,
                     'user': self.db_user,
                     'password': self.password,
-                    'database': self.db_name,
-                    'port': int(self.db_port),
-                    'as_dict': False
+                    'database': self.db_name
                 }
             ]
 
