@@ -47,27 +47,60 @@ class Connector(models.Model):
         self.ensure_one()
         try:
             _logger.info(f'Creating connection to {self.db_ip}:{self.db_port} with database {self.db_name}')
-            conn = pymssql.connect(
-                server=self.db_ip,
-                user=self.db_user,
-                password=self.password,
-                database=self.db_name,
-                port=int(self.db_port),
-                timeout=30,
-                login_timeout=20,
-                tds_version='7.3',
-                appname='Odoo Attendance'
-            )
-            _logger.debug('Connection parameters: %s', {
-                'server': self.db_ip,
-                'user': self.db_user,
-                'database': self.db_name,
-                'port': self.db_port,
-                'timeout': 30,
-                'login_timeout': 20,
-                'tds_version': '7.3'
-            })
-            return conn
+            
+            # Build server string with instance name if needed
+            server = f'{self.db_ip},{self.db_port}'
+            
+            # Try different connection configurations
+            configs = [
+                {
+                    'server': server,
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                    'tds_version': '7.2',
+                    'charset': 'UTF-8',
+                    'timeout': 30,
+                    'login_timeout': 60,
+                    'appname': 'Odoo Attendance',
+                },
+                {
+                    'host': self.db_ip,
+                    'port': int(self.db_port),
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                    'tds_version': '7.3',
+                    'charset': 'UTF-8',
+                    'timeout': 30,
+                },
+                {
+                    'server': self.db_ip,
+                    'port': int(self.db_port),
+                    'user': self.db_user,
+                    'password': self.password,
+                    'database': self.db_name,
+                }
+            ]
+
+            last_error = None
+            for config in configs:
+                try:
+                    _logger.debug('Trying connection with config: %s', {
+                        k: v for k, v in config.items() if k != 'password'
+                    })
+                    conn = pymssql.connect(**config)
+                    _logger.info('Successfully connected with config: %s', 
+                        {k: v for k, v in config.items() if k != 'password'})
+                    return conn
+                except Exception as e:
+                    last_error = e
+                    _logger.warning('Connection attempt failed: %s', str(e))
+                    continue
+
+            if last_error:
+                raise last_error
+            
         except Exception as e:
             _logger.error(f'Connection failed: {str(e)}', exc_info=True)
             raise ValidationError(_(f'Connection error: {str(e)}'))
