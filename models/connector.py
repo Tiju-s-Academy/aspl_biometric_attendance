@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
-import pyodbc
-from pyodbc import OperationalError
 import pymssql
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
@@ -54,75 +52,22 @@ class Connector(models.Model):
                 _logger.error('Network connectivity test failed')
                 return False
 
-            # Try different connection methods
-            methods = [
-                self._try_pymssql_connection,
-                self._try_pyodbc_connection,
-                self._try_direct_connection
-            ]
-
-            for method in methods:
-                try:
-                    if method(rec):
-                        return True
-                except Exception as e:
-                    _logger.error(f'Connection method {method.__name__} failed: {str(e)}')
-                    continue
-            
-            return False
-
-    def _try_pymssql_connection(self, rec):
-        _logger.info('Attempting PyMSSQL connection...')
-        try:
-            conn = pymssql.connect(
-                server=rec.db_ip,
-                user=rec.db_user,
-                password=rec.password,
-                database=rec.db_name,
-                port=int(rec.db_port),
-                timeout=10
-            )
-            _logger.info('PyMSSQL connection successful')
-            conn.close()
-            return True
-        except Exception as e:
-            _logger.error(f'PyMSSQL connection failed: {str(e)}')
-            raise
-
-    def _try_pyodbc_connection(self, rec):
-        _logger.info('Attempting PyODBC connection...')
-        try:
-            conn_str = (
-                f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-                f'SERVER={rec.db_ip};'
-                f'PORT={rec.db_port};'
-                f'DATABASE={rec.db_name};'
-                f'UID={rec.db_user};'
-                f'PWD={rec.password};'
-                f'TrustServerCertificate=yes;'
-                f'Encrypt=yes;'
-                f'Timeout=10;'
-            )
-            _logger.debug(f'Connection string: {conn_str}')
-            conn = pyodbc.connect(conn_str)
-            _logger.info('PyODBC connection successful')
-            conn.close()
-            return True
-        except Exception as e:
-            _logger.error(f'PyODBC connection failed: {str(e)}')
-            raise
-
-    def _try_direct_connection(self, rec):
-        _logger.info('Attempting direct TCP connection...')
-        try:
-            conn_str = f"tcp:host={rec.db_ip},port={rec.db_port};uid={rec.db_user};pwd={rec.password}"
-            sock = socket.create_connection((rec.db_ip, int(rec.db_port)), timeout=10)
-            _logger.info('TCP connection successful')
-            sock.close()
-            return True
-        except Exception as e:
-            _logger.error(f'Direct TCP connection failed: {str(e)}')
-            raise
+            try:
+                _logger.info('Attempting PyMSSQL connection...')
+                conn = pymssql.connect(
+                    server=rec.db_ip,
+                    user=rec.db_user,
+                    password=rec.password,
+                    database=rec.db_name,
+                    port=int(rec.db_port),
+                    timeout=10
+                )
+                _logger.info('PyMSSQL connection successful')
+                conn.close()
+                return True
+            except Exception as e:
+                _logger.error(f'Connection failed: {str(e)}')
+                return False
 
     def connect(self):
         for rec in self:

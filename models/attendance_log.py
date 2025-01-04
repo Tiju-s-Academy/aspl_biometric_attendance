@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import datetime
-
-import pyodbc
+import pymssql
 import pytz
 from dateutil.relativedelta import relativedelta
 from odoo import fields, models, _
 from odoo.exceptions import ValidationError
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class AttendanceLog(models.Model):
     _name = "attendance.log"
@@ -24,18 +25,15 @@ class AttendanceLog(models.Model):
         connector_ids = self.env['connector.sqlserver'].search([('auto_gen_attendance', '=', True)])
         for connector in connector_ids:
             try:
-                conn_str = (
-                    f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-                    f'SERVER={connector.db_ip};'
-                    f'PORT={connector.db_port};'
-                    f'DATABASE={connector.db_name};'
-                    f'UID={connector.db_user};'
-                    f'PWD={connector.password};'
-                    f'TrustServerCertificate=yes;'
-                    f'Encrypt=yes;'
-                    f'Timeout=10;'
+                _logger.info(f'Attempting to connect to {connector.db_ip}:{connector.db_port}')
+                conn = pymssql.connect(
+                    server=connector.db_ip,
+                    user=connector.db_user,
+                    password=connector.password,
+                    database=connector.db_name,
+                    port=int(connector.db_port),
+                    timeout=10
                 )
-                conn = pyodbc.connect(conn_str, timeout=10)
 
                 start_date = (datetime.datetime.today() - relativedelta(months=1)).strftime("%Y-%m-%d")
                 end_date = datetime.datetime.today().strftime("%Y-%m-%d")
@@ -186,5 +184,8 @@ class AttendanceLog(models.Model):
                                         prev_bio_data = bio_data
 
                 conn.close()
-            except ValueError as e:
-                raise ValidationError(_('Connection error: ' + e))
+                _logger.info('Successfully processed attendance data')
+
+            except Exception as e:
+                _logger.error(f'Error generating attendance: {str(e)}')
+                raise ValidationError(_(f'Connection error: {str(e)}'))
