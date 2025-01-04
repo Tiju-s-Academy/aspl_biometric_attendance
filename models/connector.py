@@ -100,6 +100,7 @@ class Connector(models.Model):
                 f'UID={rec.db_user};'
                 f'PWD={rec.password};'
                 f'TrustServerCertificate=yes;'
+                f'Encrypt=yes;'
                 f'Timeout=10;'
             )
             _logger.debug(f'Connection string: {conn_str}')

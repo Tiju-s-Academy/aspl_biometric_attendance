@@ -32,6 +32,8 @@ class AttendanceLog(models.Model):
                     f'UID={connector.db_user};'
                     f'PWD={connector.password};'
                     f'TrustServerCertificate=yes;'
+                    f'Encrypt=yes;'
+                    f'Timeout=10;'
                 )
                 conn = pyodbc.connect(conn_str, timeout=10)
 
