@@ -48,52 +48,32 @@ class Connector(models.Model):
         try:
             _logger.info(f'Creating connection to {self.db_ip}:{self.db_port} with database {self.db_name}')
             
-            # Try different connection configurations
-            configs = [
-                # Basic configuration
-                {
-                    'server': self.db_ip,
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name,
-                    'port': int(self.db_port)
-                },
-                # Alternative server format
-                {
-                    'server': f'{self.db_ip}:{self.db_port}',
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name
-                },
-                # Minimal configuration
-                {
-                    'host': self.db_ip,
-                    'user': self.db_user,
-                    'password': self.password,
-                    'database': self.db_name
-                }
-            ]
+            # Configuration that matches working server
+            config = {
+                'server': self.db_ip,
+                'user': self.db_user,
+                'password': self.password,
+                'database': self.db_name,
+                'port': int(self.db_port),
+                'tds_version': '7.3',  # Match working server's TDS version (73.b.0.3)
+                'charset': 'CP1252',   # Match working server's charset
+                'timeout': 10,
+                'login_timeout': 10,
+                'autocommit': True,
+                'appname': 'Odoo',
+                'blocksize': 4096      # Match working server's block size
+            }
 
-            last_error = None
-            for i, config in enumerate(configs, 1):
-                try:
-                    _logger.info('Attempt %d: Trying connection with config: %s', 
-                        i, {k:v for k,v in config.items() if k != 'password'})
-                    
-                    conn = pymssql.connect(**config)
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT @@VERSION')
-                    version = cursor.fetchone()
-                    _logger.info('Successfully connected with config %d. SQL Server version: %s', i, version)
-                    
-                    return conn
-                except Exception as e:
-                    last_error = e
-                    _logger.warning('Connection attempt %d failed: %s', i, str(e))
-                    continue
-
-            if last_error:
-                raise last_error
+            _logger.info('Attempting connection with config: %s', 
+                {k:v for k,v in config.items() if k != 'password'})
+            
+            conn = pymssql.connect(**config)
+            cursor = conn.cursor()
+            cursor.execute('SELECT @@VERSION')
+            version = cursor.fetchone()
+            _logger.info('Successfully connected. SQL Server version: %s', version)
+            
+            return conn
             
         except Exception as e:
             _logger.error('Connection failed: %s', str(e), exc_info=True)

@@ -20,7 +20,7 @@
     "depends": ['base', 'hr', 'hr_attendance'],
     "external_dependencies": {
         'python': ['pymssql'],
-        'bin': ['odbcinst']
+        'bin': ['tsql']
     },
     "data": [
         'security/user_group.xml',
