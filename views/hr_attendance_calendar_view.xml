@@ -34,19 +34,19 @@
             <xpath expr="//search" position="inside">
                 <separator/>
                 <filter string="Yesterday" name="yesterday" 
-                    domain="['check_in', '>=', (context_today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d 00:00:00'),
-                            'check_in', '&lt;', context_today().strftime('%Y-%m-%d 00:00:00')]"/>
-                <filter string="This Week" name="this_week" 
-                    domain="['check_in', '>=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d 00:00:00')]"/>
-                <filter string="Late Arrivals" name="late_check_in" 
-                    domain="['check_in', '>=', context_today().strftime('%Y-%m-%d 09:30:00')]"/>
+                        domain="[['check_in', '>=', (datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d 00:00:00')],
+                                 ['check_in', '&lt;', datetime.now().strftime('%Y-%m-%d 00:00:00')]]"/>
+                <filter string="Current Week" name="this_week" 
+                        domain="[['check_in', '>=', (datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d 00:00:00')]]"/>
+                <filter string="Late Check-in" name="late_check_in" 
+                        domain="[['check_in', 'like', datetime.now().strftime('%Y-%m-%d 09:30:__')]]"/>
                 <separator/>
                 <group expand="0" string="Group By">
                     <filter string="Employee" name="employee" context="{'group_by': 'employee_id'}"/>
                     <filter string="Department" name="department" context="{'group_by': 'department_id'}"/>
-                    <filter string="Date" name="date" context="{'group_by': 'check_in:day'}"/>
-                    <filter string="Week" name="week" context="{'group_by': 'check_in:week'}"/>
-                    <filter string="Month" name="month" context="{'group_by': 'check_in:month'}"/>
+                    <filter string="Day" name="check_in_day" context="{'group_by': 'check_in:day'}"/>
+                    <filter string="Week" name="check_in_week" context="{'group_by': 'check_in:week'}"/>
+                    <filter string="Month" name="check_in_month" context="{'group_by': 'check_in:month'}"/>
                 </group>
             </xpath>
         </field>
@@ -58,7 +58,7 @@
         <field name="res_model">hr.attendance</field>
         <field name="view_mode">calendar,tree,form</field>
         <field name="context">{
-            'search_default_week': 1,
+            'search_default_check_in_week': 1,
             'search_default_department': 1
         }</field>
     </record>
