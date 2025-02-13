@@ -3,22 +3,16 @@
     <record id="hr_attendance_view_calendar" model="ir.ui.view">
         <field name="name">hr.attendance.calendar</field>
         <field name="model">hr.attendance</field>
+        <field name="priority">20</field>
         <field name="arch" type="xml">
             <calendar string="Attendances" 
                      date_start="check_in" 
                      date_stop="check_out" 
                      mode="month" 
-                     color="employee_id"
-                     quick_add="false"
-                     event_open_popup="true"
-                     form_view_id="false">
-                <!-- Display Format -->
-                <field name="employee_id" filters="1" avatar_field="image_128"/>
-                <field name="department_id" filters="1"/>
-                <field name="worked_hours" string="Duration" widget="float_time"/>
-                <!-- Popover Details -->
-                <field name="check_in" string="Check In"/>
-                <field name="check_out" string="Check Out"/>
+                     color="employee_id">
+                <field name="employee_id"/>
+                <field name="department_id"/>
+                <field name="worked_hours"/>
             </calendar>
         </field>
     </record>
@@ -29,13 +23,6 @@
         <field name="model">hr.attendance</field>
         <field name="inherit_id" ref="hr_attendance.hr_attendance_view_filter"/>
         <field name="arch" type="xml">
-            <filter name="today" position="after">
-                <filter string="This Week" name="this_week" domain="[
-                    ('check_in', '>=', (context_today() + relativedelta(weeks=-1,days=1,weekday=0)).strftime('%Y-%m-%d')),
-                    ('check_in', '&lt;=', (context_today() + relativedelta(weekday=6)).strftime('%Y-%m-%d'))]"/>
-                <filter string="This Month" name="this_month" 
-                        domain="[('check_in', '>=', context_today().strftime('%Y-%m-01'))]"/>
-            </filter>
             <field name="employee_id" position="after">
                 <field name="department_id"/>
             </field>
@@ -47,6 +34,8 @@
 
     <!-- Update Action to Show Calendar by Default -->
     <record id="hr_attendance.hr_attendance_action" model="ir.actions.act_window">
+        <field name="name">Attendances</field>
+        <field name="res_model">hr.attendance</field>
         <field name="view_mode">calendar,tree,form</field>
     </record>
 </odoo>
