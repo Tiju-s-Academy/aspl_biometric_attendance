@@ -33,13 +33,34 @@ class AttendanceLog(models.Model):
                 t1 = f"DeviceLogs_{(datetime.datetime.today() - relativedelta(days=15)).month}_{(datetime.datetime.today() - relativedelta(months=1)).year}"
                 t2 = f"DeviceLogs_{datetime.datetime.today().month}_{datetime.datetime.today().year}"
 
-                sql = "select DeviceLogId,UserId,LogDate,Direction from " + str(
-                    t1) + " where cast(LogDate as DATE) >= '" + str(
-                    start_date) + "' and cast(LogDate as DATE) <= '" + str(
-                    end_date) + "' UNION select DeviceLogId,UserId,LogDate,Direction from " + str(
-                    t2) + " where cast(LogDate as DATE) >= '" + str(
-                    start_date) + "' and cast(LogDate as DATE) <= '" + str(
-                    end_date) + "' order by UserId,LogDate;"
+                sql = """
+                    WITH OrderedLogs AS (
+                        SELECT DeviceLogId, UserId, LogDate,
+                        ROW_NUMBER() OVER(PARTITION BY UserId, CAST(LogDate AS DATE) 
+                                        ORDER BY LogDate) as first_entry,
+                        ROW_NUMBER() OVER(PARTITION BY UserId, CAST(LogDate AS DATE) 
+                                        ORDER BY LogDate DESC) as last_entry,
+                        COUNT(*) OVER(PARTITION BY UserId, CAST(LogDate AS DATE)) as entry_count
+                        FROM (
+                            SELECT DeviceLogId, UserId, LogDate FROM """ + str(t1) + """
+                            WHERE cast(LogDate as DATE) >= '""" + str(start_date) + """' 
+                            AND cast(LogDate as DATE) <= '""" + str(end_date) + """'
+                            UNION ALL
+                            SELECT DeviceLogId, UserId, LogDate FROM """ + str(t2) + """
+                            WHERE cast(LogDate as DATE) >= '""" + str(start_date) + """' 
+                            AND cast(LogDate as DATE) <= '""" + str(end_date) + """'
+                        ) combined_logs
+                    )
+                    SELECT DeviceLogId, UserId, LogDate,
+                        CASE 
+                            WHEN first_entry = 1 THEN 'in'
+                            WHEN last_entry = 1 THEN 'out'
+                            WHEN entry_count = 1 THEN 'in'
+                            ELSE 'mid'
+                        END as Direction
+                    FROM OrderedLogs
+                    ORDER BY UserId, LogDate;
+                """
 
                 if conn:
                     cursor = conn.cursor()
@@ -85,14 +106,17 @@ class AttendanceLog(models.Model):
                                         # create hr.attendance
                                         user_date = bio_data.log_date.astimezone(user_time).strftime("%H:%M")
 
-                                        # make prev_bio_data empty when employee change, or date change
-                                        if prev_bio_data and (
-                                                prev_bio_data.employee != bio_data.employee or prev_bio_data.log_date.date() != bio_data.log_date.date()):
-                                            # set check-out in last attendance if check-out not find.
-                                            if prev_bio_data.employee == bio_data.employee and prev_bio_data.log_date.date() != bio_data.log_date.date() and not last_attendance.check_out:
-                                                last_attendance.write({'check_out': last_attendance.check_in,
-                                                                       'comment': 'Check Out not found.',
-                                                                       'has_error': True})
+                                        # Add safety check for last_attendance
+                                        if prev_bio_data and (prev_bio_data.employee != bio_data.employee or 
+                                                            prev_bio_data.log_date.date() != bio_data.log_date.date()):
+                                            if (prev_bio_data.employee == bio_data.employee and 
+                                                prev_bio_data.log_date.date() != bio_data.log_date.date() and 
+                                                last_attendance and not last_attendance.check_out):
+                                                last_attendance.write({
+                                                    'check_out': last_attendance.check_in,
+                                                    'comment': 'Check Out not found.',
+                                                    'has_error': True
+                                                })
                                             prev_bio_data = False
                                             last_attendance = False
 
