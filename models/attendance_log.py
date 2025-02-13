@@ -48,7 +48,9 @@ class AttendanceLog(models.Model):
 
                     prev_bio_data = False
                     last_attendance = False
-                    user_time = pytz.timezone(self.env.user.partner_id.tz)
+                    # Use UTC if user timezone is not set
+                    user_tz = self.env.user.partner_id.tz or 'UTC'
+                    user_time = pytz.timezone(user_tz)
                     while row is not None:
                         row = cursor.fetchone()
                         if row is None:
