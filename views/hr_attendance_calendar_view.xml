@@ -25,32 +25,32 @@
         <field name="model">hr.attendance</field>
         <field name="inherit_id" ref="hr_attendance.hr_attendance_view_filter"/>
         <field name="arch" type="xml">
-            <!-- Add Department Field -->
-            <xpath expr="//field[@name='employee_id']" position="after">
+            <!-- Add fields -->
+            <field name="employee_id" position="after">
                 <field name="department_id"/>
+            </field>
+
+            <!-- Add filters -->
+            <xpath expr="//search" position="inside">
                 <separator/>
-            </xpath>
-            
-            <!-- Add Time Filters -->
-            <xpath expr="//filter[@name='today']" position="after">
                 <filter string="Yesterday" name="yesterday" 
-                        domain="[('check_in', '>=', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 1]"/>
+                        domain="[('check_in', '&gt;=', (context_today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')),
+                                ('check_in', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter string="This Week" name="this_week" 
-                        domain="[('check_in', '>=', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 7]"/>
+                        domain="[('check_in', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
                 <filter string="Last Week" name="last_week" 
-                        domain="[('check_in', '>=', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 14,
-                                ('check_in', '&lt;', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 7]"/>
+                        domain="[('check_in', '&gt;=', (context_today() - datetime.timedelta(days=14)).strftime('%Y-%m-%d')),
+                                ('check_in', '&lt;', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
                 <separator/>
                 <filter string="Late Check-in" name="late_check_in" 
-                        domain="[('check_in::time', '>=', '09:30:00')]"/>
-            </xpath>
-
-            <!-- Add Group By Options -->
-            <xpath expr="//filter[@name='employee']" position="after">
-                <filter string="Department" name="department" context="{'group_by': 'department_id'}"/>
-                <filter string="Date" name="date" context="{'group_by': 'check_in:day'}"/>
-                <filter string="Week" name="week" context="{'group_by': 'check_in:week'}"/>
-                <filter string="Month" name="month" context="{'group_by': 'check_in:month'}"/>
+                        domain="[('check_in::time', '&gt;=', '09:30:00')]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Department" name="department" context="{'group_by': 'department_id'}"/>
+                    <filter string="Date" name="date" context="{'group_by': 'check_in:day'}"/>
+                    <filter string="Week" name="week" context="{'group_by': 'check_in:week'}"/>
+                    <filter string="Month" name="month" context="{'group_by': 'check_in:month'}"/>
+                </group>
             </xpath>
         </field>
     </record>
@@ -61,7 +61,7 @@
         <field name="res_model">hr.attendance</field>
         <field name="view_mode">calendar,tree,form</field>
         <field name="context">{
-            'search_default_this_month': 1,
+            'search_default_month': 1,
             'search_default_department': 1
         }</field>
     </record>
