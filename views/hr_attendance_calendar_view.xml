@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="hr_attendance_view_calendar" model="ir.ui.view">
+        <field name="name">hr.attendance.calendar</field>
+        <field name="model">hr.attendance</field>
+        <field name="arch" type="xml">
+            <calendar string="Attendances" 
+                     date_start="check_in" 
+                     date_stop="check_out" 
+                     mode="month" 
+                     color="employee_id"
+                     quick_add="false"
+                     display="[employee_id, worked_hours]">
+                <!-- Display Format -->
+                <field name="employee_id"/>
+                <field name="department_id"/>
+                <field name="worked_hours" widget="float_time"/>
+                <!-- Calendar Pop-up -->
+                <templates>
+                    <t t-name="calendar-box">
+                        <div class="o_calendar_entry">
+                            <strong><t t-esc="record.employee_id.name"/></strong>
+                            <div t-if="record.worked_hours">
+                                Duration: <t t-esc="format_float_time(record.worked_hours)"/>
+                            </div>
+                            <div t-if="record.check_in">
+                                In: <t t-esc="format_datetime(record.check_in, 'HH:mm')"/>
+                            </div>
+                            <div t-if="record.check_out">
+                                Out: <t t-esc="format_datetime(record.check_out, 'HH:mm')"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </calendar>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="hr_attendance_view_search_extended" model="ir.ui.view">
+        <field name="name">hr.attendance.search.extended</field>
+        <field name="model">hr.attendance</field>
+        <field name="inherit_id" ref="hr_attendance.hr_attendance_view_filter"/>
+        <field name="arch" type="xml">
+            <filter name="today" position="after">
+                <filter string="This Week" name="this_week" domain="[
+                    ('check_in', '>=', (context_today() + relativedelta(weeks=-1,days=1,weekday=0)).strftime('%Y-%m-%d')),
+                    ('check_in', '&lt;=', (context_today() + relativedelta(weekday=6)).strftime('%Y-%m-%d'))]"/>
+                <filter string="This Month" name="this_month" 
+                        domain="[('check_in', '>=', context_today().strftime('%Y-%m-01'))]"/>
+            </filter>
+            <field name="employee_id" position="after">
+                <field name="department_id"/>
+            </field>
+            <filter name="employee" position="after">
+                <filter string="Department" name="department" context="{'group_by': 'department_id'}"/>
+            </filter>
+        </field>
+    </record>
+
+    <!-- Update Action to Show Calendar by Default -->
+    <record id="hr_attendance.hr_attendance_action" model="ir.actions.act_window">
+        <field name="view_mode">calendar,tree,form</field>
+    </record>
+</odoo>

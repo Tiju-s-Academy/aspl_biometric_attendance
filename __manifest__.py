@@ -26,6 +26,7 @@
         'security/ir.model.access.csv',
         'data/attendance_log_cron.xml',
         'views/hr_attendance_views.xml',
+        'views/hr_attendance_calendar_view.xml',
         'views/attendance_log_view.xml',
         'views/connector_setup.xml',
         'views/inherit_hr_employee_view.xml',

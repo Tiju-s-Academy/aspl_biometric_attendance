@@ -13,7 +13,23 @@ class IrRule(models.Model):
 
 
 class HrAttendance(models.Model):
-    _inherit = ['hr.attendance']
+    _inherit = "hr.attendance"
+
     comment = fields.Text('Details')
     atten_status = fields.Boolean("Status")
     has_error = fields.Boolean("Mistake")
+    department_id = fields.Many2one('hr.department', related='employee_id.department_id', 
+                                  string='Department', store=True)
+    
+    def name_get(self):
+        result = []
+        for attendance in self:
+            if not attendance.check_out:
+                result.append((attendance.id, f"{attendance.employee_id.name} (Check In)"))
+            else:
+                worked_hours = '{:.2f}'.format(attendance.worked_hours)
+                result.append((
+                    attendance.id, 
+                    f"{attendance.employee_id.name}: {worked_hours} hours"
+                ))
+        return result
