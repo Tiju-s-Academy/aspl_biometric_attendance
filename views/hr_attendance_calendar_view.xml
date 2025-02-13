@@ -10,28 +10,15 @@
                      mode="month" 
                      color="employee_id"
                      quick_add="false"
-                     display="[employee_id, worked_hours]">
+                     event_open_popup="true"
+                     form_view_id="false">
                 <!-- Display Format -->
-                <field name="employee_id"/>
-                <field name="department_id"/>
-                <field name="worked_hours" widget="float_time"/>
-                <!-- Calendar Pop-up -->
-                <templates>
-                    <t t-name="calendar-box">
-                        <div class="o_calendar_entry">
-                            <strong><t t-esc="record.employee_id.name"/></strong>
-                            <div t-if="record.worked_hours">
-                                Duration: <t t-esc="format_float_time(record.worked_hours)"/>
-                            </div>
-                            <div t-if="record.check_in">
-                                In: <t t-esc="format_datetime(record.check_in, 'HH:mm')"/>
-                            </div>
-                            <div t-if="record.check_out">
-                                Out: <t t-esc="format_datetime(record.check_out, 'HH:mm')"/>
-                            </div>
-                        </div>
-                    </t>
-                </templates>
+                <field name="employee_id" filters="1" avatar_field="image_128"/>
+                <field name="department_id" filters="1"/>
+                <field name="worked_hours" string="Duration" widget="float_time"/>
+                <!-- Popover Details -->
+                <field name="check_in" string="Check In"/>
+                <field name="check_out" string="Check Out"/>
             </calendar>
         </field>
     </record>
