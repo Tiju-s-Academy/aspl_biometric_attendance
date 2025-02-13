@@ -63,7 +63,9 @@ class AttendanceLog(models.Model):
                                     continue
 
                                 if row[2] is not None:
-                                    local = pytz.timezone(self.env.user.partner_id.tz)
+                                    # Use same timezone fallback for local conversion
+                                    local_tz = self.env.user.partner_id.tz or 'UTC'
+                                    local = pytz.timezone(local_tz)
                                     local_dt = local.localize(row[2], is_dst=None)
                                     row[2] = local_dt.astimezone(pytz.utc).strftime("%Y-%m-%d %H:%M:%S")
 
