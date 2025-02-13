@@ -89,8 +89,10 @@ class AttendanceLog(models.Model):
                     prev_bio_data = False
                     last_attendance = False
                     # Use UTC if user timezone is not set
-                    user_tz = self.env.user.partner_id.tz or 'UTC'
+                    user_tz = self.env.user.partner_id.tz or 'Asia/Kolkata'  # Default to IST if no timezone
                     user_time = pytz.timezone(user_tz)
+                    utc = pytz.UTC
+
                     while row is not None:
                         row = cursor.fetchone()
                         if row is None:
@@ -103,11 +105,19 @@ class AttendanceLog(models.Model):
                                     continue
 
                                 if row[2] is not None:
-                                    # Use same timezone fallback for local conversion
-                                    local_tz = self.env.user.partner_id.tz or 'UTC'
-                                    local = pytz.timezone(local_tz)
-                                    local_dt = local.localize(row[2], is_dst=None)
-                                    row[2] = local_dt.astimezone(pytz.utc).strftime("%Y-%m-%d %H:%M:%S")
+                                    # Convert the database time to user's timezone
+                                    naive_dt = row[2]
+                                    if isinstance(naive_dt, str):
+                                        naive_dt = datetime.datetime.strptime(naive_dt, "%Y-%m-%d %H:%M:%S")
+                                    
+                                    # First localize to user timezone
+                                    local_dt = user_time.localize(naive_dt, is_dst=None)
+                                    # Then convert to UTC for storage
+                                    utc_dt = local_dt.astimezone(utc)
+                                    
+                                    _logger.info(f"Time conversion for {row[1]}: Original: {row[2]}, Local: {local_dt}, UTC: {utc_dt}")
+                                    
+                                    row[2] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
 
                                 if row is not None:
                                     model_data = {
@@ -123,7 +133,8 @@ class AttendanceLog(models.Model):
                                         bio_data = self.env['attendance.log'].create(model_data)
 
                                         # create hr.attendance
-                                        user_date = bio_data.log_date.astimezone(user_time).strftime("%H:%M")
+                                        local_time = pytz.utc.localize(datetime.datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S"))
+                                        user_date = local_time.astimezone(user_time).strftime("%H:%M")
 
                                         # Check for any unclosed attendance
                                         open_attendance = self.env['hr.attendance'].search([
@@ -153,10 +164,9 @@ class AttendanceLog(models.Model):
                                         if bio_data.direction == 'in':
                                             try:
                                                 if not open_attendance:
-                                                    # Try normal create first
                                                     att_vals = {
                                                         'employee_id': hr_employee.id,
-                                                        'check_in': bio_data.log_date,
+                                                        'check_in': row[2],  # Using UTC time directly
                                                         'comment': user_date + '(I)',
                                                     }
                                                     last_attendance = self.env['hr.attendance'].sudo().create(att_vals)
@@ -170,9 +180,8 @@ class AttendanceLog(models.Model):
 
                                         elif bio_data.direction == 'out':
                                             if open_attendance and open_attendance.check_in.date() == bio_data.log_date.date():
-                                                # Only update check-out if it's same day
                                                 open_attendance.sudo().write({
-                                                    'check_out': bio_data.log_date,
+                                                    'check_out': row[2],  # Using UTC time directly
                                                     'comment': (open_attendance.comment or '') + ', ' + user_date + '(O)'
                                                 })
                                                 last_attendance = open_attendance
