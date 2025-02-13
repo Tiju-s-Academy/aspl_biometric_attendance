@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import datetime
+import logging
 
 import pymssql
 import pytz
@@ -8,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from odoo import fields, models, _
 from odoo.exceptions import ValidationError
 
+_logger = logging.getLogger(__name__)
 
 class AttendanceLog(models.Model):
     _name = "attendance.log"
@@ -34,13 +36,12 @@ class AttendanceLog(models.Model):
                 t2 = f"DeviceLogs_{datetime.datetime.today().month}_{datetime.datetime.today().year}"
 
                 sql = """
-                    WITH OrderedLogs AS (
+                    WITH DailyLogs AS (
                         SELECT DeviceLogId, UserId, LogDate,
-                        ROW_NUMBER() OVER(PARTITION BY UserId, CAST(LogDate AS DATE) 
-                                        ORDER BY LogDate) as first_entry,
-                        ROW_NUMBER() OVER(PARTITION BY UserId, CAST(LogDate AS DATE) 
-                                        ORDER BY LogDate DESC) as last_entry,
-                        COUNT(*) OVER(PARTITION BY UserId, CAST(LogDate AS DATE)) as entry_count
+                            FIRST_VALUE(LogDate) OVER(PARTITION BY UserId, CAST(LogDate AS DATE) 
+                                ORDER BY LogDate) as first_log,
+                            LAST_VALUE(LogDate) OVER(PARTITION BY UserId, CAST(LogDate AS DATE) 
+                                ORDER BY LogDate ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) as last_log
                         FROM (
                             SELECT DeviceLogId, UserId, LogDate FROM """ + str(t1) + """
                             WHERE cast(LogDate as DATE) >= '""" + str(start_date) + """' 
@@ -51,14 +52,14 @@ class AttendanceLog(models.Model):
                             AND cast(LogDate as DATE) <= '""" + str(end_date) + """'
                         ) combined_logs
                     )
-                    SELECT DeviceLogId, UserId, LogDate,
+                    SELECT DISTINCT DeviceLogId, UserId, LogDate,
                         CASE 
-                            WHEN first_entry = 1 THEN 'in'
-                            WHEN last_entry = 1 THEN 'out'
-                            WHEN entry_count = 1 THEN 'in'
-                            ELSE 'mid'
+                            WHEN LogDate = first_log THEN 'in'
+                            WHEN LogDate = last_log AND LogDate != first_log THEN 'out'
+                            ELSE NULL
                         END as Direction
-                    FROM OrderedLogs
+                    FROM DailyLogs
+                    WHERE LogDate = first_log OR LogDate = last_log
                     ORDER BY UserId, LogDate;
                 """
 
@@ -106,107 +107,26 @@ class AttendanceLog(models.Model):
                                         # create hr.attendance
                                         user_date = bio_data.log_date.astimezone(user_time).strftime("%H:%M")
 
-                                        # Add safety check for last_attendance
-                                        if prev_bio_data and (prev_bio_data.employee != bio_data.employee or 
-                                                            prev_bio_data.log_date.date() != bio_data.log_date.date()):
-                                            if (prev_bio_data.employee == bio_data.employee and 
-                                                prev_bio_data.log_date.date() != bio_data.log_date.date() and 
-                                                last_attendance and not last_attendance.check_out):
-                                                last_attendance.write({
-                                                    'check_out': last_attendance.check_in,
-                                                    'comment': 'Check Out not found.',
-                                                    'has_error': True
-                                                })
-                                            prev_bio_data = False
-                                            last_attendance = False
-
-                                        if bio_data.direction == 'out' and not prev_bio_data:
-                                            # check last entry of in direction without check-out then set check-out in last entry for same day and continue
-                                            no_check_out_attendances = self.env['hr.attendance'].search([
-                                                ('employee_id', '=', hr_employee.id),
-                                                ('check_out', '=', False),
-                                            ], order='check_in desc', limit=1)
-                                            if no_check_out_attendances and no_check_out_attendances.check_in.date() == bio_data.log_date.date():
-                                                no_check_out_attendances.write(
-                                                    {'check_out': bio_data.log_date,
-                                                     'comment': no_check_out_attendances.comment + ', ' + user_date + '(O)'})
-                                                last_attendance = no_check_out_attendances
-                                                prev_bio_data = bio_data
-                                                continue
-                                            else:
-                                                if no_check_out_attendances and no_check_out_attendances.check_in.date() != bio_data.log_date.date():
-                                                    no_check_out_attendances.write(
-                                                        {'check_out': no_check_out_attendances.check_in,
-                                                         'comment': 'Check Out not found.',
-                                                         'has_error': True})
-
-                                                # continue if first entry get of out direction
-                                                att_vals = {
-                                                    'employee_id': hr_employee.id,
-                                                    'check_in': bio_data.log_date,
-                                                    'check_out': bio_data.log_date,
-                                                    'comment': "Check In not found.",
-                                                    'has_error': True
-                                                }
-                                                self.env['hr.attendance'].create(att_vals)
-                                                continue
-
+                                        # Simplified attendance creation
                                         if bio_data.direction == 'in':
-                                            try:
-                                                # First check for any unclosed attendance
-                                                open_attendance = self.env['hr.attendance'].search([
-                                                    ('employee_id', '=', hr_employee.id),
-                                                    ('check_out', '=', False)
-                                                ], order='check_in desc', limit=1)
-                                                
-                                                if open_attendance:
-                                                    # If open attendance is from a previous date or same date
-                                                    if open_attendance.check_in.date() <= bio_data.log_date.date():
-                                                        # Close the previous attendance with its check_in time
-                                                        open_attendance.write({
-                                                            'check_out': open_attendance.check_in,
-                                                            'comment': (open_attendance.comment or '') + ', Auto-closed: multiple check-ins',
-                                                            'has_error': True
-                                                        })
-                                                
-                                                # Create new attendance record
-                                                att_vals = {
-                                                    'employee_id': hr_employee.id,
-                                                    'check_in': bio_data.log_date,
-                                                    'comment': user_date + '(I)',
-                                                }
-                                                last_attendance = self.env['hr.attendance'].sudo().create(att_vals)
-                                                prev_bio_data = bio_data
-                                                
-                                            except Exception as e:
-                                                _logger.warning(f"Attendance creation failed for employee {hr_employee.name}: {str(e)}")
-                                                continue
-
-                                        elif bio_data.direction == 'out':
-                                            # Find the most recent unclosed attendance
-                                            open_attendance = self.env['hr.attendance'].search([
-                                                ('employee_id', '=', hr_employee.id),
-                                                ('check_out', '=', False)
-                                            ], order='check_in desc', limit=1)
-                                            
-                                            if open_attendance:
-                                                open_attendance.write({
-                                                    'check_out': bio_data.log_date,
-                                                    'comment': (open_attendance.comment or '') + ', ' + user_date + '(O)'
-                                                })
-                                                last_attendance = open_attendance
-                                            else:
-                                                # If no open attendance found, create a new complete record
-                                                att_vals = {
-                                                    'employee_id': hr_employee.id,
-                                                    'check_in': bio_data.log_date,
-                                                    'check_out': bio_data.log_date,
-                                                    'comment': "Auto-generated: single out punch",
-                                                    'has_error': True
-                                                }
-                                                last_attendance = self.env['hr.attendance'].sudo().create(att_vals)
-                                            
+                                            # Create new attendance record for check-in
+                                            att_vals = {
+                                                'employee_id': hr_employee.id,
+                                                'check_in': bio_data.log_date,
+                                                'comment': user_date + '(I)',
+                                            }
+                                            last_attendance = self.env['hr.attendance'].sudo().create(att_vals)
                                             prev_bio_data = bio_data
+
+                                        elif bio_data.direction == 'out' and prev_bio_data and prev_bio_data.direction == 'in':
+                                            # Update check-out time for the last attendance
+                                            if last_attendance and not last_attendance.check_out:
+                                                last_attendance.write({
+                                                    'check_out': bio_data.log_date,
+                                                    'comment': (last_attendance.comment or '') + ', ' + user_date + '(O)'
+                                                })
+
+                                        # Remove other conditions as we only care about first and last entries
 
                 conn.close()
             except ValueError as e:
