@@ -33,3 +33,8 @@ class HrAttendance(models.Model):
                     f"{attendance.employee_id.name}: {worked_hours} hours"
                 ))
         return result
+
+    @api.model
+    def get_unusual_days(self, date_from, date_to=None):
+        """Return unusual days in calendar view. Empty method to avoid error."""
+        return {}
