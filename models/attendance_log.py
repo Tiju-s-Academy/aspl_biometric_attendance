@@ -152,59 +152,61 @@ class AttendanceLog(models.Model):
                                                 continue
 
                                         if bio_data.direction == 'in':
-                                            # First check for any unclosed attendance
+                                            try:
+                                                # First check for any unclosed attendance
+                                                open_attendance = self.env['hr.attendance'].search([
+                                                    ('employee_id', '=', hr_employee.id),
+                                                    ('check_out', '=', False)
+                                                ], order='check_in desc', limit=1)
+                                                
+                                                if open_attendance:
+                                                    # If open attendance is from a previous date or same date
+                                                    if open_attendance.check_in.date() <= bio_data.log_date.date():
+                                                        # Close the previous attendance with its check_in time
+                                                        open_attendance.write({
+                                                            'check_out': open_attendance.check_in,
+                                                            'comment': (open_attendance.comment or '') + ', Auto-closed: multiple check-ins',
+                                                            'has_error': True
+                                                        })
+                                                
+                                                # Create new attendance record
+                                                att_vals = {
+                                                    'employee_id': hr_employee.id,
+                                                    'check_in': bio_data.log_date,
+                                                    'comment': user_date + '(I)',
+                                                }
+                                                last_attendance = self.env['hr.attendance'].sudo().create(att_vals)
+                                                prev_bio_data = bio_data
+                                                
+                                            except Exception as e:
+                                                _logger.warning(f"Attendance creation failed for employee {hr_employee.name}: {str(e)}")
+                                                continue
+
+                                        elif bio_data.direction == 'out':
+                                            # Find the most recent unclosed attendance
                                             open_attendance = self.env['hr.attendance'].search([
                                                 ('employee_id', '=', hr_employee.id),
                                                 ('check_out', '=', False)
                                             ], order='check_in desc', limit=1)
                                             
                                             if open_attendance:
-                                                # If open attendance is from a previous date, close it
-                                                if open_attendance.check_in.date() != bio_data.log_date.date():
-                                                    open_attendance.write({
-                                                        'check_out': open_attendance.check_in,
-                                                        'comment': 'Check Out not found.',
-                                                        'has_error': True
-                                                    })
-                                                else:
-                                                    # Same day - update check-in time if new time is earlier
-                                                    if bio_data.log_date < open_attendance.check_in:
-                                                        open_attendance.write({
-                                                            'check_in': bio_data.log_date,
-                                                            'has_error': True,
-                                                            'comment': (open_attendance.comment or '') + ', Updated check-in ' + user_date + '(I)'
-                                                        })
-                                                    last_attendance = open_attendance
-                                                    prev_bio_data = bio_data
-                                                    continue
-
-                                            # Now handle the regular check-in process
-                                            if prev_bio_data and prev_bio_data.direction == 'in':
-                                                if last_attendance:
-                                                    last_attendance.write({
-                                                        'check_in': bio_data.log_date,
-                                                        'has_error': True,
-                                                        'comment': last_attendance.comment + ', ' + user_date + '(I)'
-                                                    })
+                                                open_attendance.write({
+                                                    'check_out': bio_data.log_date,
+                                                    'comment': (open_attendance.comment or '') + ', ' + user_date + '(O)'
+                                                })
+                                                last_attendance = open_attendance
                                             else:
-                                                # Create new attendance only if no active attendance exists
+                                                # If no open attendance found, create a new complete record
                                                 att_vals = {
                                                     'employee_id': hr_employee.id,
                                                     'check_in': bio_data.log_date,
-                                                    'comment': user_date + '(I)',
+                                                    'check_out': bio_data.log_date,
+                                                    'comment': "Auto-generated: single out punch",
+                                                    'has_error': True
                                                 }
-                                                last_attendance = self.env['hr.attendance'].create(att_vals)
-
-                                        elif prev_bio_data and prev_bio_data.direction == 'in' and bio_data.direction == 'out':
-                                            if not last_attendance.check_out:
-                                                last_attendance.write(
-                                                    {'check_out': bio_data.log_date,
-                                                     'comment': last_attendance.comment + ', ' + user_date + '(O)'})
-                                        elif prev_bio_data and prev_bio_data.direction == 'out' and bio_data.direction == 'out':
-                                            last_attendance.comment = last_attendance.comment + ', ' + user_date + '(O)'
-                                            last_attendance.write({'has_error': True,
-                                                                   'comment': last_attendance.comment + ', ' + user_date + '(O)'})
-                                        prev_bio_data = bio_data
+                                                last_attendance = self.env['hr.attendance'].sudo().create(att_vals)
+                                            
+                                            prev_bio_data = bio_data
 
                 conn.close()
             except ValueError as e:
