@@ -26,33 +26,32 @@
         <field name="inherit_id" ref="hr_attendance.hr_attendance_view_filter"/>
         <field name="arch" type="xml">
             <!-- Add Department Field -->
-            <field name="employee_id" position="after">
+            <xpath expr="//field[@name='employee_id']" position="after">
                 <field name="department_id"/>
                 <separator/>
-            </field>
+            </xpath>
             
             <!-- Add Time Filters -->
-            <filter name="today" position="after">
+            <xpath expr="//filter[@name='today']" position="after">
                 <filter string="Yesterday" name="yesterday" 
-                        domain="[('check_in', '>=', (context_today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')),
-                                ('check_in', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                        domain="[('check_in', '>=', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 1]"/>
                 <filter string="This Week" name="this_week" 
-                        domain="[('check_in', '>=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                        domain="[('check_in', '>=', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 7]"/>
                 <filter string="Last Week" name="last_week" 
-                        domain="[('check_in', '>=', (context_today() - datetime.timedelta(days=context_today().weekday() + 7)).strftime('%Y-%m-%d')),
-                                ('check_in', '&lt;', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                        domain="[('check_in', '>=', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 14,
+                                ('check_in', '&lt;', ((context_today()).strftime('%Y-%m-%d 00:00:00'))) - 7]"/>
                 <separator/>
                 <filter string="Late Check-in" name="late_check_in" 
-                        domain="[('check_in', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(9, 30)))]"/>
-            </filter>
+                        domain="[('check_in::time', '>=', '09:30:00')]"/>
+            </xpath>
 
             <!-- Add Group By Options -->
-            <filter name="employee" position="after">
+            <xpath expr="//filter[@name='employee']" position="after">
                 <filter string="Department" name="department" context="{'group_by': 'department_id'}"/>
                 <filter string="Date" name="date" context="{'group_by': 'check_in:day'}"/>
                 <filter string="Week" name="week" context="{'group_by': 'check_in:week'}"/>
                 <filter string="Month" name="month" context="{'group_by': 'check_in:month'}"/>
-            </filter>
+            </xpath>
         </field>
     </record>
 
@@ -63,7 +62,7 @@
         <field name="view_mode">calendar,tree,form</field>
         <field name="context">{
             'search_default_this_month': 1,
-            'search_default_department': 1,
+            'search_default_department': 1
         }</field>
     </record>
 </odoo>
